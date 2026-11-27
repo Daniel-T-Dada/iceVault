@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { Link, router, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,11 +13,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AuthInput from "../../components/UI/AuthInput";
-import Button from "../../components/UI/Button";
+import Button from "@/components/UI/Button";
 import SocialAuthButtons from "../../components/UI/SocialAuthButtons";
 import { Colors } from "../../constants/theme";
 
-const ARROW_BACK_ICON = require("../../assets/icons/arrow-back.svg");
+const ARROW_BACK_ICON = require("@/assets/icons/arrow-back.svg");
 const PERSON_ICON = require("../../assets/icons/person.svg");
 const PHONE_ICON = require("../../assets/icons/phone.svg");
 const EMAIL_ICON = require("../../assets/icons/email.svg");
@@ -70,7 +70,7 @@ const SignUpScreen = () => {
 
           <View style={styles.headerBlock}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join Ice-Vault today</Text>
+            <Text style={styles.subtitle}>Join Ice Vault today</Text>
           </View>
 
           <View style={styles.roleRow}>
@@ -146,7 +146,7 @@ const SignUpScreen = () => {
             <Text style={styles.termsText}>
               I agree to the{" "}
               <Text style={styles.termsLink}>
-                Terms & Condition{"\n"}and privacy policy
+                <Link href={"#/terms" as Href}>Terms & Condition</Link> and <Link href={"#/privacy" as Href}>privacy policy</Link>
               </Text>
             </Text>
           </Pressable>
@@ -168,11 +168,11 @@ const SignUpScreen = () => {
           </View>
 
           <View style={styles.socialWrap}>
-            <SocialAuthButtons variant="compact" />
+            <SocialAuthButtons variant="pill" />
           </View>
 
           <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Already have an account ? </Text>
+            <Text style={styles.footerText}>Already have an account? </Text>
             <Pressable
               accessibilityRole="button"
               hitSlop={8}
@@ -227,7 +227,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.onSurface,
     letterSpacing: 0.15,
-    paddingLeft: 12,
   },
   roleRow: {
     flexDirection: "row",

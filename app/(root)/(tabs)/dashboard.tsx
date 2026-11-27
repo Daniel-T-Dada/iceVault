@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import IceVaultLogo from "../../components/UI/IceVaultLogo";
-import { Colors } from "../../constants/theme";
+import IceVaultLogo from "../../../components/UI/IceVaultLogo";
+import { Colors } from "../../../constants/theme";
 
 const DashboardScreen = () => {
   return (
