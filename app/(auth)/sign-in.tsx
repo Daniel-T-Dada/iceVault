@@ -25,7 +25,7 @@ const SignInScreen = () => {
   const [password, setPassword] = useState("");
 
   const handleSignIn = () => {
-    router.replace("/(root)/dashboard");
+    router.replace("/(root)/(tabs)/dashboard");
   };
 
   return (
