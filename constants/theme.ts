@@ -21,4 +21,5 @@ export const Colors = {
   otpBox: "#d9d9d9",
   onPrimary: "#ffffff",
   onPrimaryContainer: "#05200f",
+  warning: "#B45309"
 } as const;

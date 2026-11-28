@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -12,7 +13,9 @@ const CHECK_ICON = require("../../assets/icons/check-verified.svg");
 
 const VerificationScreen = () => {
   const { fullName } = useLocalSearchParams<{ fullName?: string }>();
-  const displayName = fullName || "Musa Danjuma";
+  const { user } = useAuth();
+
+  const displayName = user?.fullName || fullName || "Musa Danjuma";
 
   return (
     <SafeAreaView style={styles.safeArea}>

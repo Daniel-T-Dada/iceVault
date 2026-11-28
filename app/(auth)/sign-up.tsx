@@ -1,3 +1,6 @@
+import Button from "@/components/UI/Button";
+import { useAuth } from "@/contexts/AuthContext";
+import { SignUpPayload, UserRole } from "@/types/auth";
 import { Image } from "expo-image";
 import { Link, router, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -13,9 +16,21 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AuthInput from "../../components/UI/AuthInput";
-import Button from "@/components/UI/Button";
 import SocialAuthButtons from "../../components/UI/SocialAuthButtons";
 import { Colors } from "../../constants/theme";
+
+interface SignUpFormState extends SignUpPayload {
+  agreed: boolean;
+}
+
+const INITIAL_FORM_STATE: SignUpFormState = {
+  fullName: "",
+  phoneNumber: "",
+  email: "",
+  password: "",
+  role: "farmer",
+  agreed: true,
+};
 
 const ARROW_BACK_ICON = require("@/assets/icons/arrow-back.svg");
 const PERSON_ICON = require("../../assets/icons/person.svg");
@@ -24,22 +39,82 @@ const EMAIL_ICON = require("../../assets/icons/email.svg");
 const LOCK_ICON = require("../../assets/icons/lock.svg");
 const ADD_ICON = require("../../assets/icons/add.svg");
 
-const ROLES = ["Farmer/trader", "Attendant", "Operator"] as const;
-type Role = (typeof ROLES)[number];
+const ROLE_OPTIONS: { label: string; value: UserRole }[] = [
+  { label: "Farmer/trader", value: "farmer" },
+  { label: "Attendant", value: "attendant" },
+  { label: "Operator", value: "operator" },
+];
 
 const SignUpScreen = () => {
-  const [selectedRole, setSelectedRole] = useState<Role>("Operator");
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [agreed, setAgreed] = useState(true);
+  const { signUp } = useAuth();
 
-  const handleRegister = () => {
-    router.push({
-      pathname: "/(auth)/otp",
-      params: { fullName: fullName.trim() || "Musa Danjuma" },
-    });
+  const [form, setForm] = useState<SignUpFormState>(INITIAL_FORM_STATE);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const updateField = <K extends keyof SignUpFormState>(
+    key: K,
+    value: SignUpFormState[K],
+  ) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (errorMessage) setErrorMessage(null);
+  };
+
+  const handleRegister = async () => {
+    setErrorMessage(null);
+
+    const trimmedName = form.fullName.trim();
+    const trimmedPhone = form.phoneNumber.trim();
+    const normalizedEmail = form.email.trim().toLowerCase();
+
+    if (!trimmedName || !trimmedPhone || !normalizedEmail || !form.password) {
+      setErrorMessage("Please fill in all fields to create your account.");
+      return;
+    }
+
+    if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
+      setErrorMessage("Please enter a valid email address.");
+      return;
+    }
+
+    if (form.password.length < 6) {
+      setErrorMessage("Password must be at least 6 characters.");
+      return;
+    }
+
+    if (!form.agreed) {
+      setErrorMessage(
+        "Please agree to the Terms & Conditions and Privacy Policy.",
+      );
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const { devOtp } = await signUp({
+        fullName: trimmedName,
+        phoneNumber: trimmedPhone,
+        email: normalizedEmail,
+        password: form.password,
+        role: form.role,
+      });
+
+      router.push({
+        pathname: "/(auth)/otp",
+        params: {
+          email: normalizedEmail,
+          fullName: trimmedName,
+          devOtp: devOtp ?? "",
+        },
+      });
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to create account.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -74,13 +149,13 @@ const SignUpScreen = () => {
           </View>
 
           <View style={styles.roleRow}>
-            {ROLES.map((role) => {
-              const isSelected = selectedRole === role;
+            {ROLE_OPTIONS.map((option) => {
+              const isSelected = form.role === option.value;
               return (
                 <Pressable
-                  key={role}
+                  key={option.value}
                   accessibilityRole="button"
-                  onPress={() => setSelectedRole(role)}
+                  onPress={() => updateField("role", option.value)}
                   style={[
                     styles.rolePill,
                     isSelected ? styles.rolePillActive : styles.rolePillInactive,
@@ -92,7 +167,7 @@ const SignUpScreen = () => {
                       isSelected && styles.roleTextActive,
                     ]}
                   >
-                    {role}
+                    {option.label}
                   </Text>
                 </Pressable>
               );
@@ -103,59 +178,69 @@ const SignUpScreen = () => {
             <AuthInput
               icon={PERSON_ICON}
               placeholder="Full Name"
-              value={fullName}
-              onChangeText={setFullName}
+              value={form.fullName}
+              onChangeText={(value) => updateField("fullName", value)}
               autoCapitalize="words"
               backgroundColor={Colors.surfaceLow}
             />
             <AuthInput
               icon={PHONE_ICON}
               placeholder="Phone Number"
-              value={phone}
-              onChangeText={setPhone}
+              value={form.phoneNumber}
+              onChangeText={(value) => updateField("phoneNumber", value)}
               keyboardType="phone-pad"
               backgroundColor={Colors.surfaceLow}
             />
             <AuthInput
               icon={EMAIL_ICON}
               placeholder="Email Address"
-              value={email}
-              onChangeText={setEmail}
+              value={form.email}
+              onChangeText={(value) => updateField("email", value)}
               keyboardType="email-address"
+              autoCapitalize="none"
               backgroundColor={Colors.surfaceLow}
             />
             <AuthInput
               icon={LOCK_ICON}
               placeholder="Password"
-              value={password}
-              onChangeText={setPassword}
+              value={form.password}
+              onChangeText={(value) => updateField("password", value)}
               secureTextEntry
               backgroundColor={Colors.surfaceLow}
             />
           </View>
 
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
           <Pressable
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: agreed }}
-            onPress={() => setAgreed((prev) => !prev)}
+            accessibilityState={{ checked: form.agreed }}
+            onPress={() => updateField("agreed", !form.agreed)}
             style={styles.termsRow}
           >
-            <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
-              {agreed ? <Text style={styles.checkmark}>✓</Text> : null}
+            <View
+              style={[styles.checkbox, form.agreed && styles.checkboxChecked]}
+            >
+              {form.agreed ? <Text style={styles.checkmark}>✓</Text> : null}
             </View>
             <Text style={styles.termsText}>
               I agree to the{" "}
               <Text style={styles.termsLink}>
-                <Link href={"#/terms" as Href}>Terms & Condition</Link> and <Link href={"#/privacy" as Href}>privacy policy</Link>
+                <Link href={"#/terms" as Href}>Terms & Condition</Link> and{" "}
+                <Link href={"#/privacy" as Href}>privacy policy</Link>
               </Text>
             </Text>
           </Pressable>
 
           <View style={styles.registerWrap}>
             <Button
-              title="Register Account"
+              title={isSubmitting ? "Registering..." : "Register Account"}
               size="large"
-              disabled={!agreed}
+              disabled={!form.agreed || isSubmitting}
               leftIcon={
                 <Image
                   source={ADD_ICON}
@@ -264,6 +349,21 @@ const styles = StyleSheet.create({
   inputsGroup: {
     marginTop: 24,
     gap: 12,
+  },
+  errorBanner: {
+    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#dc2626",
   },
   termsRow: {
     flexDirection: "row",

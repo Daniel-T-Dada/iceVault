@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
@@ -19,12 +20,26 @@ const OTP_LENGTH = 6;
 const RESEND_SECONDS = 24;
 
 const OtpScreen = () => {
-  const { fullName } = useLocalSearchParams<{ fullName?: string }>();
+  const { email, fullName, devOtp: initialDevOtp } = useLocalSearchParams<{
+    email?: string;
+    fullName?: string;
+    devOtp?: string;
+  }>();
+  const { verifyOtp, resendOtp, pendingEmail, user } = useAuth();
+
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
+  const [devOtp, setDevOtp] = useState(initialDevOtp ?? "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const inputRefs = useRef<(React.ComponentRef<typeof TextInput> | null)[]>(
-    []
+    [],
   );
+
+  const targetEmail = email ?? pendingEmail ?? "";
+  const isCodeComplete = digits.every((digit) => digit.length === 1);
 
   useEffect(() => {
     if (secondsLeft <= 0) return;
@@ -35,6 +50,8 @@ const OtpScreen = () => {
   }, [secondsLeft]);
 
   const handleChange = (text: string, index: number) => {
+    if (errorMessage) setErrorMessage(null);
+
     const cleaned = text.replace(/[^0-9]/g, "");
     const nextDigits = [...digits];
 
@@ -61,6 +78,58 @@ const OtpScreen = () => {
   const handleKeyPress = (key: string, index: number) => {
     if (key === "Backspace" && !digits[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleVerify = async () => {
+    setErrorMessage(null);
+    const code = digits.join("");
+
+    if (code.length !== OTP_LENGTH) {
+      setErrorMessage("Please enter the complete 6-digit code.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const session = await verifyOtp(code, targetEmail);
+
+      router.replace({
+        pathname: "/(auth)/verification",
+        params: {
+          fullName: fullName || session.user.fullName || "Musa Danjuma",
+        },
+      });
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Invalid verification code.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (secondsLeft > 0 || isResending) return;
+    setErrorMessage(null);
+
+    try {
+      setIsResending(true);
+      const result = await resendOtp(targetEmail);
+
+      if (result.devOtp) {
+        setDevOtp(result.devOtp);
+      }
+
+      setDigits(Array(OTP_LENGTH).fill(""));
+      setSecondsLeft(RESEND_SECONDS);
+      inputRefs.current[0]?.focus();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Could not resend code.",
+      );
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -95,17 +164,31 @@ const OtpScreen = () => {
         <View style={styles.contentBlock}>
           <View style={styles.codeSection}>
             <Text style={styles.prompt}>Enter the 6-digit code</Text>
+            {targetEmail ? (
+              <Text style={styles.emailSubtitle}>Sent to {targetEmail}</Text>
+            ) : null}
+
             <View style={styles.otpRow}>
               <View style={styles.otpGroup}>{[0, 1, 2].map(renderBox)}</View>
               <Text style={styles.dash}>-</Text>
               <View style={styles.otpGroup}>{[3, 4, 5].map(renderBox)}</View>
             </View>
+
+            {devOtp ? (
+              <View style={styles.devOtpBadge}>
+                <Text style={styles.devOtpText}>Dev OTP: {devOtp}</Text>
+              </View>
+            ) : null}
+
+            {errorMessage ? (
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            ) : null}
           </View>
 
           <View style={styles.bottomSection}>
             <Pressable
-              disabled={secondsLeft > 0}
-              onPress={() => setSecondsLeft(RESEND_SECONDS)}
+              disabled={secondsLeft > 0 || isResending}
+              onPress={handleResend}
               style={styles.resendWrap}
             >
               <Text style={styles.resendText}>
@@ -117,19 +200,17 @@ const OtpScreen = () => {
                     </Text>
                   </>
                 ) : (
-                  <Text style={styles.timerHighlight}>Resend code</Text>
+                  <Text style={styles.timerHighlight}>
+                    {isResending ? "Sending..." : "Resend code"}
+                  </Text>
                 )}
               </Text>
             </Pressable>
 
             <Button
-              title="Verify"
-              onPress={() =>
-                router.push({
-                  pathname: "/(auth)/verification",
-                  params: { fullName: fullName || "Musa Danjuma" },
-                })
-              }
+              title={isSubmitting ? "Verifying..." : "Verify"}
+              disabled={!isCodeComplete || isSubmitting}
+              onPress={handleVerify}
             />
           </View>
         </View>
@@ -168,6 +249,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.15,
     textAlign: "center",
   },
+  emailSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.gray,
+    marginTop: -12,
+    textAlign: "center",
+  },
   otpRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -193,9 +281,31 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#000000",
   },
+  devOtpBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  devOtpText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.primary,
+    letterSpacing: 1,
+  },
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#dc2626",
+    textAlign: "center",
+  },
   bottomSection: {
     gap: 40,
     alignItems: "center",
+    paddingBottom: 20,
   },
   resendWrap: {
     padding: 8,
