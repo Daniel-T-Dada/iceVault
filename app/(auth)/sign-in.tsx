@@ -1,3 +1,5 @@
+import { useAuth } from "@/contexts/AuthContext";
+import { SignInPayload } from "@/types/auth";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
@@ -20,12 +22,89 @@ import { Colors } from "../../constants/theme";
 const EMAIL_ICON = require("../../assets/icons/email.svg");
 const LOCK_ICON = require("../../assets/icons/lock.svg");
 
-const SignInScreen = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+const INITIAL_FORM_STATE: SignInPayload = {
+  email: "",
+  password: "",
+};
 
-  const handleSignIn = () => {
-    router.replace("/(root)/(tabs)/dashboard");
+const SignInScreen = () => {
+  const { signIn, resendOtp, setPendingEmail } = useAuth();
+
+  const [form, setForm] = useState<SignInPayload>(INITIAL_FORM_STATE);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const updateField = <K extends keyof SignInPayload>(
+    key: K,
+    value: SignInPayload[K],
+  ) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (errorMessage) setErrorMessage(null);
+  };
+
+  const handleSignIn = async () => {
+    setErrorMessage(null);
+
+    const normalizedEmail = form.email.trim().toLowerCase();
+
+    if (!normalizedEmail || !form.password) {
+      setErrorMessage("Please enter both your email address and password.");
+      return;
+    }
+
+    if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
+      setErrorMessage("Please enter a valid email address.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      await signIn({
+        email: normalizedEmail,
+        password: form.password,
+      });
+
+      router.replace("/(root)/(tabs)/dashboard");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to sign in.";
+
+      if (message.toLowerCase().includes("verify your account")) {
+        try {
+          setPendingEmail(normalizedEmail);
+          const { devOtp } = await resendOtp(normalizedEmail);
+
+          router.push({
+            pathname: "/(auth)/otp",
+            params: {
+              email: normalizedEmail,
+              devOtp: devOtp ?? "",
+            },
+          });
+          return;
+        } catch (resendError) {
+          setErrorMessage(
+            resendError instanceof Error
+              ? resendError.message
+              : "Account unverified. Unable to send verification code.",
+          );
+          return;
+        }
+      }
+
+      setErrorMessage(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = () => {
+    const normalizedEmail = form.email.trim().toLowerCase();
+    router.push({
+      pathname: "/(auth)/otp",
+      params: normalizedEmail ? { email: normalizedEmail } : {},
+    });
   };
 
   return (
@@ -52,25 +131,32 @@ const SignInScreen = () => {
               <AuthInput
                 icon={EMAIL_ICON}
                 placeholder="Email Address"
-                value={email}
-                onChangeText={setEmail}
+                value={form.email}
+                onChangeText={(value) => updateField("email", value)}
                 keyboardType="email-address"
+                autoCapitalize="none"
                 backgroundColor={Colors.surface}
               />
               <AuthInput
                 icon={LOCK_ICON}
                 placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
+                value={form.password}
+                onChangeText={(value) => updateField("password", value)}
                 secureTextEntry
                 backgroundColor={Colors.surface}
               />
             </View>
 
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
             <Pressable
               accessibilityRole="button"
               hitSlop={8}
-              onPress={() => router.push("/(auth)/otp")}
+              onPress={handleForgotPassword}
               style={styles.forgotBtn}
             >
               <Text style={styles.forgotText}>Forget Password?</Text>
@@ -78,7 +164,11 @@ const SignInScreen = () => {
           </View>
 
           <View style={styles.actionsBlock}>
-            <Button title="Sign In" onPress={handleSignIn} />
+            <Button
+              title={isSubmitting ? "Signing In..." : "Sign In"}
+              disabled={isSubmitting}
+              onPress={handleSignIn}
+            />
 
             <SocialAuthButtons variant="pill" />
 
@@ -143,6 +233,20 @@ const styles = StyleSheet.create({
   },
   inputsGroup: {
     gap: 12,
+  },
+  errorBanner: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#dc2626",
   },
   forgotBtn: {
     alignSelf: "flex-end",

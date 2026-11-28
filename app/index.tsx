@@ -1,9 +1,11 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -18,6 +20,7 @@ import { ONBOARDING_DATA, OnboardingItem } from "../constants/onboarding";
 import { Colors } from "../constants/theme";
 
 const OnboardingScreen = () => {
+  const { isAuthenticated, isLoading } = useAuth();
   const { width, height } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList<OnboardingItem>>(null);
@@ -36,6 +39,19 @@ const OnboardingScreen = () => {
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50,
   }).current;
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar style="light" />
+        <ActivityIndicator size="large" color={Colors.tertiary} />
+      </View>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Redirect href="/(root)/(tabs)/dashboard" />;
+  }
 
   const handleNext = (index: number) => {
     if (index < ONBOARDING_DATA.length - 1) {
@@ -157,6 +173,12 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: "#010e06",
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: "#010e06",
+    alignItems: "center",
+    justifyContent: "center",
   },
   slide: {
     position: "relative",
