@@ -42,7 +42,7 @@ const VerificationScreen = () => {
 
             <Button
               title="Go to Dashboard"
-              onPress={() => router.replace("/(root)/dashboard")}
+              onPress={() => router.replace("/(root)/(tabs)/dashboard")}
             />
           </View>
         </View>
